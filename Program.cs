@@ -1,101 +1,74 @@
-﻿using System.Security.Cryptography;
+﻿
+using ImageMagick;
 
-namespace FindDuplicateImageFiles
+namespace ConvertImageFiles
 {
     internal class Program
     {
         static void Main(string[] args)
         {
-            // First we need to declare a variable for the images folder path.
-            string imagesFolderPath = @"C:\Users\icode\Pictures\Source"; // change as needed
+            // Declare some variables
+            string imagesFolderPath = @"C:\Users\icode\Pictures\Source"; // change path 
+            string outputImagesFolderPath = @"C:\Users\icode\Pictures\target"; // change path
 
-            // Then we need to get all the file paths from the images folder.
-            string[] imageFileList = Directory.GetFiles(imagesFolderPath);
+            // Set the file type you want to convert from.
+            string convertFromFileType = "*.jpg";
 
-            // Check if the list is empty, if so we exit this method.
+            // Set the file type you want to convert to.
+            string convertToFileType = ".png";
+
+            // Now get all the file paths from the source folder.
+            string[] imageFileList = Directory.GetFiles(imagesFolderPath, convertFromFileType);
+
+            // Check if imageFiles list is empty, if so exist this method.
             if (imageFileList.Length == 0)
             {
                 Console.WriteLine("No files in the directory");
                 return;
             }
 
-            // Get the file hashes
-            var fileHashes = GetFileHashes(imageFileList);
-
-            // Check for duplicates
-            FindDuplicate(fileHashes);
-        }
-
-
-        private static Dictionary<string, List<string>> GetFileHashes(string[] imageFileList)
-        {
-            var hashToFilePaths = new Dictionary<string, List<string>>();
-
-            // We then loop through each file in the list.
-            foreach (var filePath in imageFileList)
+            // Check if target folder exists, if not create it.
+            if (!Directory.Exists(outputImagesFolderPath))
             {
-                // Here we calculate file hash value for this file
-                string fileHash = CalculateFileHash(filePath);
-
-                // Now we check if file hash already exists
-                if (!hashToFilePaths.ContainsKey(fileHash))
-                {
-                    hashToFilePaths[fileHash] = new List<string>();
-                }
-
-                // Add file hash to the dictionary
-                hashToFilePaths[fileHash].Add(filePath);
-
-                Console.WriteLine("Processing file: " + filePath);
+                Directory.CreateDirectory(outputImagesFolderPath);
             }
 
-            // Return all the file hashes
-            return hashToFilePaths;
-        }
-
-        public static string CalculateFileHash(string filePath)
-        {
-            // We calculate the file hash using MD5 hashing from System.Security.Cryptography.
-            using (var md5 = MD5.Create())
+            // Create a dictionary of the supported file types.
+            // Here add the image formats you need.
+            Dictionary<string, MagickFormat> formatMappings = new Dictionary<string, MagickFormat>
             {
-                // We then open the image file as a stream.
-                using (var stream = File.OpenRead(filePath))
-                {
-                    // And then calculate the hash value for the image.
-                    byte[] hash = md5.ComputeHash(stream);
+               { ".jpg", MagickFormat.Jpg },
+               { ".png", MagickFormat.Png },
+               { ".bmp", MagickFormat.Bmp }
+            };
 
-                    // We then convert this hash value into string.
-                    return BitConverter.ToString(hash).Replace("-", "").ToLower();
-                }
-            }
-        }
-
-        public static void FindDuplicate(Dictionary<string, List<string>> fileHashes)
-        {
-            // Loop through each hash entry in the dictionary
-            foreach (var hashEntry in fileHashes)
+            // Loop through each image file in the list
+            foreach (string imageFilePath in imageFileList)
             {
-                // Check if hasEntry value count is greater than
-                if (hashEntry.Value.Count > 1)
+                // Wrap the image magik inside using statment.
+                using (MagickImage image = new MagickImage(imageFilePath))
                 {
-                    // Loop through each hash value
-                    for (int i = 1; i < hashEntry.Value.Count; i++)
+                    // Create converted image file path 
+                    string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(imageFilePath);
+                    string newImageTypeFilePath = Path.Combine(
+                                            outputImagesFolderPath, 
+                                            $"{fileNameWithoutExtension}{convertToFileType}");
+
+                    // Check the dictionary for the selected image type.
+                    if (formatMappings.TryGetValue(convertToFileType, out MagickFormat format))
                     {
-                        // Get the file path for this hash
-                        string duplicateFilePath = hashEntry.Value[i];
-
-                        // We then create a new file using this path adding the text _duplicate
-                        string newFilePath = Path.Combine(
-                            Path.GetDirectoryName(duplicateFilePath),
-                            Path.GetFileNameWithoutExtension(duplicateFilePath)
-                            + "_duplicate" + Path.GetExtension(duplicateFilePath)
-                        );
-
-                        // Here you can either delete or rename the duplicate
-                        File.Move(duplicateFilePath, newFilePath);
+                        // Convert the image and save the file
+                        image.Write(newImageTypeFilePath, format);
+                        Console.WriteLine("Processing file: " + newImageTypeFilePath);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Unsupported file format: " + convertToFileType);
                     }
                 }
             }
+
+            Console.WriteLine("Conversion completed.");
         }
     }
 }
